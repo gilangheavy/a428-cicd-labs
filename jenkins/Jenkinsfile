@@ -24,17 +24,17 @@ node {
             }
 
             // TAMBAHAN: DEPLOY & SLEEP
-            stage('Deploy') {
+           stage('Deploy') {
                 echo 'Deploying React App...'
                 
-                // Jalanin Container React di Port 3005 (Biar gak bentrok sama Grafana 3031)
-                // Kita pake image node buat jalanin serve (simple web server)
                 sh '''
                     echo "Deploying to Container..."
                     docker rm -f react-app-container || true
                     
-                    # Jalanin di background
-                    docker run -d --name react-app-container -p 3005:3000 \
+                    # Tambahin -e PORT=3000 biar React gak ngide pake port 80
+                    docker run -d --name react-app-container \
+                        -e PORT=3000 \
+                        -p 3005:3000 \
                         -v $(pwd):/app -w /app \
                         node:lts-buster-slim \
                         sh -c "npm install && npm start"
