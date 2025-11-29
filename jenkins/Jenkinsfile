@@ -1,30 +1,38 @@
-pipeline {
-    agent {
-        docker {
-            image 'node:lts-buster-slim'
-            args '-p 3000:3000'
+node {
+    try {
+        // Stage 1: Ambil Kode dari GitHub
+        stage('Checkout') {
+            // 'checkout scm' otomatis ngambil dari repo yang dikonfig di Jenkins
+            checkout scm
         }
-    }
-    environment {
-        CI = 'true'
-    }
-    stages {
-        stage('Build') {
-            steps {
+
+        // Definisi Image Docker (Sama kayak yang declarative: node lts)
+        // Kita simpan di variabel biar rapi
+        def appImage = docker.image('node:lts-buster-slim')
+
+        // Menjalankan container dengan parameter port 3000
+        // .inside artinya: "Jalanin perintah-perintah di bawah ini DI DALAM container itu"
+        appImage.inside('-p 3000:3000') {
+            
+            // Stage 2: Install Dependencies
+            stage('Build') {
+                echo 'Running npm install...'
                 sh 'npm install'
             }
-        }
-        stage('Test') {
-            steps {
-                sh './jenkins/scripts/test.sh'
+
+            // Stage 3: Testing
+            stage('Test') {
+                echo 'Running npm test...'
+                // Kita set environment CI=true biar test-nya gak mode "watch" (nunggu input)
+                // Jadi dia bakal jalan sekali terus exit (sukses/gagal)
+                withEnv(['CI=true']) {
+                    sh 'npm test'
+                }
             }
         }
-        stage('Deliver') {
-            steps {
-                sh './jenkins/scripts/deliver.sh'
-                input message: 'Finished using the website? (Click "Proceed" to continue)'
-                sh './jenkins/scripts/kill.sh'
-            }
-        }
+    } catch (e) {
+        // Error Handling: Kalau ada yang gagal, tandai build sebagai FAILURE
+        currentBuild.result = 'FAILURE'
+        throw e
     }
 }
