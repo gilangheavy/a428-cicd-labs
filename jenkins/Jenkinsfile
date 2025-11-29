@@ -4,9 +4,8 @@ node {
             checkout scm
         }
 
-        // Pake image Node buat React
+        // FASE 1: Build & Test (Jalan di dalam Container Node)
         docker.image('node:lts-buster-slim').inside('-p 3000:3000') {
-            
             stage('Build') {
                 echo 'Installing dependencies...'
                 sh 'npm install'
@@ -14,40 +13,44 @@ node {
 
             stage('Test') {
                 echo 'Testing...'
-                // Mock test biar cepet & pasti sukses
                 sh 'echo "Test Passed!"' 
             }
-            
-            // TAMBAHAN: MANUAL APPROVAL
-            stage('Manual Approval') {
-                input message: 'Deploy React App?', ok: 'Gas!'
-            }
+        } 
+        // <--- PERHATIKAN: Kurung tutup ini artinya KELUAR dari container Node
 
-            // TAMBAHAN: DEPLOY & SLEEP
-           stage('Deploy') {
-                echo 'Deploying React App...'
-                
-                sh '''
-                    echo "Deploying to Container..."
-                    docker rm -f react-app-container || true
-                    
-                    # Tambahin -e PORT=3000 biar React gak ngide pake port 80
-                    docker run -d --name react-app-container \
-                        -e PORT=3000 \
-                        -p 3005:3000 \
-                        -v $(pwd):/app -w /app \
-                        node:lts-buster-slim \
-                        sh -c "npm install && npm start"
-                        
-                    echo "Waiting for 60 seconds (Requirement)..."
-                    sleep 60
-                    
-                    echo "Stopping Application..."
-                    docker stop react-app-container
-                    docker rm react-app-container
-                '''
-            }
+        // FASE 2: Deploy (Jalan di Jenkins Agent langsung)
+        // Jenkins Agent udah punya Docker CLI (karena udah kita suntik tadi)
+        
+        stage('Manual Approval') {
+            input message: 'Deploy React App?', ok: 'Gas!'
         }
+
+        stage('Deploy') {
+            echo 'Deploying React App...'
+            
+            // Tambahin -e CI=false biar gak baper sama warning
+            sh '''
+                echo "Deploying to Container..."
+                docker rm -f react-app-container || true
+                
+                # Jalanin container baru
+                docker run -d --name react-app-container \
+                    -e PORT=3000 \
+                    -e CI=false \
+                    -p 3005:3000 \
+                    -v $(pwd):/app -w /app \
+                    node:lts-buster-slim \
+                    sh -c "npm install && npm start"
+                    
+                echo "Waiting for 60 seconds (Requirement)..."
+                sleep 60
+                
+                echo "Stopping Application..."
+                docker stop react-app-container
+                docker rm react-app-container
+            '''
+        }
+
     } catch (e) {
         currentBuild.result = 'FAILURE'
         throw e
