@@ -27,23 +27,25 @@ node {
             stage('Deploy') {
                 echo 'Deploying React App...'
                 
-                // Simulasi Deploy React (Jalanin bentar terus matiin)
-                timeout(time: 2, unit: 'MINUTES') {
-                    sh '''
-                        echo "Starting React..."
-                        # Kita pake 'npm start' di background
-                        # pake nohup biar gak mati pas shell exit
-                        nohup npm start &
-                        PID=$!
-                        echo "React started with PID $PID"
+                // Jalanin Container React di Port 3005 (Biar gak bentrok sama Grafana 3031)
+                // Kita pake image node buat jalanin serve (simple web server)
+                sh '''
+                    echo "Deploying to Container..."
+                    docker rm -f react-app-container || true
+                    
+                    # Jalanin di background
+                    docker run -d --name react-app-container -p 3005:3000 \
+                        -v $(pwd):/app -w /app \
+                        node:lts-buster-slim \
+                        sh -c "npm install && npm start"
                         
-                        echo "Sleep 60s..."
-                        sleep 60
-                        
-                        echo "Killing React..."
-                        kill $PID || true
-                    '''
-                }
+                    echo "Waiting for 60 seconds (Requirement)..."
+                    sleep 60
+                    
+                    echo "Stopping Application..."
+                    docker stop react-app-container
+                    docker rm react-app-container
+                '''
             }
         }
     } catch (e) {
